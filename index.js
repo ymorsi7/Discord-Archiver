@@ -87,7 +87,8 @@ const landing = `<!DOCTYPE html>
 
   <div class="card">
     <h2>Commands</h2>
-    <p><code>!archive</code> — Archive the server to a folder.</p>
+    <p><code>!archive</code> — Archive the server (progress shown).</p>
+    <p><code>!archive-pause</code> / <code>!archive-resume</code> — Pause or resume an in-progress archive.</p>
     <p><code>!archive-delete confirm</code> — Delete messages (run only after you have a backup).</p>
   </div>
 
@@ -106,7 +107,7 @@ const landing = `<!DOCTYPE html>
         </details>`}
   </div>
 
-  <p class="source"><a href="https://github.com/yusufmorsi/Discord-Archiver">Source on GitHub</a></p>
+  <p class="source"><a href="https://github.com/ymorsi7/Discord-Archiver">Source on GitHub</a></p>
 </div>
 </body>
 </html>`;
@@ -126,21 +127,51 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
 });
 
-client.once('clientReady', () => console.log(`Ready as ${client.user.tag}. Commands: !archive [path] | !archive-delete confirm`));
+const archivePaused = new Map();
+const PROGRESS_EDIT_INTERVAL_MS = 2500;
+
+client.once('clientReady', () => console.log(`Ready as ${client.user.tag}. Commands: !archive [path] | !archive-pause | !archive-resume | !archive-delete confirm`));
 
 client.on('messageCreate', async (msg) => {
   if (msg.author.bot || !msg.guild) return;
   const [cmd, ...rest] = msg.content.trim().split(/\s+/);
   const arg = rest.join(' ').trim() || null;
 
+  if (cmd?.toLowerCase() === '!archive-pause') {
+    archivePaused.set(msg.guild.id, true);
+    await msg.reply('Archive paused. Use `!archive-resume` to continue.');
+    return;
+  }
+  if (cmd?.toLowerCase() === '!archive-resume') {
+    archivePaused.set(msg.guild.id, false);
+    await msg.reply('Archive resumed.');
+    return;
+  }
+
   if (cmd?.toLowerCase() === '!archive') {
     const baseDir = arg ? path.resolve(arg) : path.resolve(defaultDir);
-    await msg.reply(`Archiving to \`${baseDir}\`…`);
+    archivePaused.set(msg.guild.id, false);
+    const progressMsg = await msg.reply(`Archiving to \`${baseDir}\`…\nChannel 0/${msg.guild.channels.cache.filter((c) => c.isTextBased() && !c.isThread() && c.viewable).size} — 0 messages, 0 attachments`);
+    let lastEdit = 0;
+    const updateProgress = async (p) => {
+      const now = Date.now();
+      if (now - lastEdit < PROGRESS_EDIT_INTERVAL_MS) return;
+      lastEdit = now;
+      const paused = archivePaused.get(msg.guild.id) ? ' **[PAUSED]**' : '';
+      try {
+        await progressMsg.edit(`Archiving to \`${baseDir}\`…${paused}\nChannel **${p.channelName}** (${p.channelIndex}/${p.totalChannels}) — ${p.messages} messages, ${p.attachments} attachments`);
+      } catch (_) {}
+    };
     try {
-      const r = await archiveGuild(msg.guild, baseDir);
-      await msg.reply(`Done. ${r.channels} channels, ${r.messages} messages, ${r.attachments} attachments.${r.errors.length ? ` (${r.errors.length} errors)` : ''}`);
+      const r = await archiveGuild(msg.guild, baseDir, {
+        onProgress: updateProgress,
+        getPaused: () => archivePaused.get(msg.guild.id) ?? false,
+      });
+      await progressMsg.edit(`Done. ${r.channels} channels, ${r.messages} messages, ${r.attachments} attachments.${r.errors.length ? ` (${r.errors.length} errors)` : ''}`);
     } catch (e) {
-      await msg.reply(`Failed: ${e.message}`);
+      await progressMsg.edit(`Failed: ${e.message}`).catch(() => {});
+    } finally {
+      archivePaused.delete(msg.guild.id);
     }
     return;
   }

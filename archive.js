@@ -32,13 +32,24 @@ function textChannels(guild) {
   return guild.channels.cache.filter((c) => c.isTextBased() && !c.isThread() && c.viewable);
 }
 
-export async function archiveGuild(guild, baseDir) {
+async function waitUnpaused(getPaused) {
+  while (getPaused?.()) {
+    await new Promise((r) => setTimeout(r, 800));
+  }
+}
+
+export async function archiveGuild(guild, baseDir, opts = {}) {
+  const { onProgress, getPaused } = opts;
   const root = path.join(baseDir, safeName(guild.name));
   await fs.mkdir(root, { recursive: true });
   const stats = { channels: 0, messages: 0, attachments: 0, errors: [] };
   const channels = textChannels(guild);
+  const totalChannels = channels.size;
+  let channelIndex = 0;
 
   for (const [, ch] of channels) {
+    await waitUnpaused(getPaused);
+    channelIndex++;
     const dir = path.join(root, safeName(ch.name));
     const attDir = path.join(dir, 'attachments');
     await fs.mkdir(attDir, { recursive: true });
@@ -48,12 +59,14 @@ export async function archiveGuild(guild, baseDir) {
       messages = await fetchAll(ch);
     } catch (err) {
       stats.errors.push(`${ch.name}: ${err.message}`);
+      if (onProgress) onProgress({ channelName: ch.name, channelIndex, totalChannels, messages: stats.messages, attachments: stats.attachments });
       continue;
     }
 
     const out = [];
     let n = 0;
     for (const msg of messages) {
+      await waitUnpaused(getPaused);
       const rec = {
         id: msg.id,
         author: msg.author?.tag ?? 'unknown',
@@ -63,6 +76,7 @@ export async function archiveGuild(guild, baseDir) {
         attachments: [],
       };
       for (const att of msg.attachments.values()) {
+        await waitUnpaused(getPaused);
         const ext = path.extname(new URL(att.url).pathname) || '.bin';
         const name = `${String(n).padStart(5, '0')}_${safeName(att.name || att.id + ext)}`;
         const fp = path.join(attDir, name);
@@ -81,6 +95,7 @@ export async function archiveGuild(guild, baseDir) {
     }
     await fs.writeFile(path.join(dir, 'messages.json'), JSON.stringify(out, null, 2));
     stats.channels++;
+    if (onProgress) onProgress({ channelName: ch.name, channelIndex, totalChannels, messages: stats.messages, attachments: stats.attachments });
   }
   return stats;
 }

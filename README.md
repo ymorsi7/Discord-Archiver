@@ -60,8 +60,9 @@ Use **`!archive`** (default folder) or **`!archive /path/to/usb`** so the archiv
 
 ## Commands
 
-- **`!archive`** — Archive the server to the default folder (`OUTPUT_DIR` in `.env`, or `./archive`).
+- **`!archive`** — Archive the server to the default folder; the bot edits its message with progress (channel X/Y, messages, attachments).
 - **`!archive /path/to/folder`** — Archive to that path (e.g. `/Volumes/MyUSB/backup` or `D:\backup`).
+- **`!archive-pause`** / **`!archive-resume`** — Pause or resume an archive in progress (same server).
 - **`!archive-delete`** — Shows instructions.
 - **`!archive-delete confirm`** — Deletes every message the bot can delete in the server (needs **Manage Messages**). Use only after you have a verified backup. Irreversible.
 
