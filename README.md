@@ -6,6 +6,12 @@ Bot that archives an entire Discord server (all text channels: messages + attach
 
 ---
 
+## Use the hosted bot (no setup)
+
+You can use **the bot already running** at **[discord-archiver.fly.dev](https://discord-archiver.fly.dev)**. Click **“Add bot to your server”** on that page, choose your server, then in any channel run `!archive` to back up that server. Archives are stored on the host; for full control and privacy, run the bot yourself (below).
+
+---
+
 ## Deploy (default) — Fly.io
 
 Free to run within [Fly.io](https://fly.io)’s allowance. Of the common free hosts, Fly gives you an isolated VM and region choice (e.g. EU); your token and process run there, not in a shared container.
